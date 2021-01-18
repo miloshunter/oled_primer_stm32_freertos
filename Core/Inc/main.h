@@ -37,6 +37,7 @@ extern "C" {
 #include "fonts.h"
 #include "test.h"
 #include "cmsis_os.h"
+#include "stdio.h"
 
 /* USER CODE END Includes */
 

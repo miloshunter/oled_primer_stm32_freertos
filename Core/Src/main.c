@@ -61,10 +61,10 @@ const osThreadAttr_t buttonTask_attributes = {
   .priority = (osPriority_t) osPriorityHigh2,
   .stack_size = 128 * 4
 };
-/* Definitions for BinSemHandle */
-osSemaphoreId_t BinSemHandleHandle;
-const osSemaphoreAttr_t BinSemHandle_attributes = {
-  .name = "BinSemHandle"
+/* Definitions for intrSem */
+osSemaphoreId_t intrSemHandle;
+const osSemaphoreAttr_t intrSem_attributes = {
+  .name = "intrSem"
 };
 /* USER CODE BEGIN PV */
 
@@ -85,6 +85,14 @@ void buttonTask_fun(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int _write(int file, char *ptr, int len)
+{
+  /* Implement your write code here, this is used by puts and printf for example */
+  int i=0;
+  for(i=0 ; i<len ; i++)
+    ITM_SendChar((*ptr++));
+  return len;
+}
 
 /* USER CODE END 0 */
 
@@ -131,8 +139,8 @@ int main(void)
   /* USER CODE END RTOS_MUTEX */
 
   /* Create the semaphores(s) */
-  /* creation of BinSemHandle */
-  BinSemHandleHandle = osSemaphoreNew(1, 1, &BinSemHandle_attributes);
+  /* creation of intrSem */
+  intrSemHandle = osSemaphoreNew(1, 1, &intrSem_attributes);
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
@@ -159,6 +167,8 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
+
+
   /* USER CODE END RTOS_EVENTS */
 
   /* Start scheduler */
@@ -167,7 +177,6 @@ int main(void)
   /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  osSemaphoreAcquire(BinSemHandleHandle, 0);
 
   while (1)
   {
@@ -439,6 +448,7 @@ void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN 5 */
 	SSD1306_Init();
+	SSD1306_Clear();
 	SSD1306_GotoXY(10, 5);
 	SSD1306_Puts("Hello", &Font_11x18, 1);
 	SSD1306_GotoXY (10, 25);
@@ -448,6 +458,8 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
+	  printf("Task Display 11------->>>>>>>> usao \n");
+
 	  c_cnt += 1;
 	  if (c_cnt > 'z') {
 		c_cnt = 'A';
@@ -457,7 +469,8 @@ void StartDefaultTask(void *argument)
 	  SSD1306_Putc (c_cnt, &Font_11x18, 1);
 	  SSD1306_UpdateScreen(); // update screen
 
-	  osDelay(1000);
+	  printf("<<<<<<<<<1111111111111 zavrsio task Displej\n");
+	  osDelay(500);
   }
   /* USER CODE END 5 */
 }
@@ -475,10 +488,16 @@ void buttonTask_fun(void *argument)
   /* Infinite loop */
   for(;;)
   {
+	  printf("Task Button 22------->>>>>>>> usao\n");
+	  printf("Cekaj semafor\n");
+	  //osThreadSuspend(buttonTaskHandle);
+	  osSemaphoreAcquire(intrSemHandle, 500000);
+	  printf("Nastavi\n");
+	  SSD1306_ToggleInvert();
+	  SSD1306_UpdateScreen();
 
-
-
-	  osDelay(1);
+	  printf("<<<<<<<<<222222222222 zavrsio task Button\n");
+	  osDelay(1000);
   }
   /* USER CODE END buttonTask_fun */
 }
