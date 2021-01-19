@@ -20,7 +20,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
-#include <string.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -43,6 +42,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
 
 I2C_HandleTypeDef hi2c1;
 
@@ -86,6 +86,7 @@ const osSemaphoreAttr_t intrSem_attributes = {
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
@@ -138,6 +139,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_I2C1_Init();
@@ -166,7 +168,7 @@ int main(void)
 
   /* Create the queue(s) */
   /* creation of intrQueue */
-  intrQueueHandle = osMessageQueueNew (16, sizeof(uint16_t), &intrQueue_attributes);
+  intrQueueHandle = osMessageQueueNew (16, sizeof(uint32_t), &intrQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -418,6 +420,22 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -471,12 +489,12 @@ void StartDisplayTask(void *argument)
 	SSD1306_Init();
 	SSD1306_Clear();
 	SSD1306_GotoXY(10, 5);
-	SSD1306_Puts("Hello", &Font_11x18, 1);
+	SSD1306_Puts("Na I2C", &Font_11x18, 1);
 	SSD1306_GotoXY (10, 25);
-	SSD1306_Puts ("WORLD !!", &Font_11x18, 1);
+	SSD1306_Puts ("Displej !", &Font_11x18, 1);
 
 	char c_cnt = 'A';
-	uint16_t rec_int = 0;
+	uint32_t rec_int = 0;
 	char msg[20] = "Nista\n\0";
   /* Infinite loop */
   for(;;)
@@ -493,17 +511,17 @@ void StartDisplayTask(void *argument)
 
 	  if (osMessageQueueGetCount(intrQueueHandle)){
 		  osMessageQueueGet(intrQueueHandle, &rec_int, 0, osWaitForever);
-		  printf("Task 1111111 11 .......... primio poruku\n");
+		  printf("Task 1111111 11 .......... primio poruku!\n");
 		  SSD1306_GotoXY (25, 45);
 
-		  sprintf(msg, "ADC:%3i", rec_int);
+		  sprintf(msg, "ADC:%3d", (int)rec_int);
 		  SSD1306_Puts (msg, &Font_11x18, 1);
 	  }
 
 	  SSD1306_UpdateScreen(); // update screen
 
 	  printf("<<<<<<<<<1111111111111 zavrsio task Displej\n");
-	  osDelay(500);
+	  osDelay(100);
   }
   /* USER CODE END 5 */
 }
@@ -547,21 +565,18 @@ void buttonTask_fun(void *argument)
 void ADCTaskFun(void *argument)
 {
   /* USER CODE BEGIN ADCTaskFun */
-  uint16_t ad_res = 0;
+  uint32_t ad_res = 0;
   /* Infinite loop */
   for(;;)
   {
 	// Start ADC Conversion
-	HAL_ADC_Start(&hadc1);
-	 // Poll ADC1 Perihperal & TimeOut = 1mSec
-	HAL_ADC_PollForConversion(&hadc1, 1);
-	 // Read The ADC Conversion Result & Map It To PWM DutyCycle
-	ad_res = HAL_ADC_GetValue(&hadc1);
+	HAL_ADC_Start_DMA(&hadc1, &ad_res, 1);
+	HAL_Delay(1);
 
 	osMessageQueuePut(intrQueueHandle, &ad_res, 0, osWaitForever);
 	printf("222222222222 .......... poslao poruku\n");
 
-    osDelay(500);
+    osDelay(100);
   }
   /* USER CODE END ADCTaskFun */
 }
