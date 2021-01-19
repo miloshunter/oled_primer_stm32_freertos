@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
+#include <string.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -47,10 +48,10 @@ I2C_HandleTypeDef hi2c1;
 
 UART_HandleTypeDef huart2;
 
-/* Definitions for defaultTask */
-osThreadId_t defaultTaskHandle;
-const osThreadAttr_t defaultTask_attributes = {
-  .name = "defaultTask",
+/* Definitions for displayTask */
+osThreadId_t displayTaskHandle;
+const osThreadAttr_t displayTask_attributes = {
+  .name = "displayTask",
   .priority = (osPriority_t) osPriorityNormal,
   .stack_size = 128 * 4
 };
@@ -60,6 +61,18 @@ const osThreadAttr_t buttonTask_attributes = {
   .name = "buttonTask",
   .priority = (osPriority_t) osPriorityHigh2,
   .stack_size = 128 * 4
+};
+/* Definitions for ADCTask */
+osThreadId_t ADCTaskHandle;
+const osThreadAttr_t ADCTask_attributes = {
+  .name = "ADCTask",
+  .priority = (osPriority_t) osPriorityLow,
+  .stack_size = 128 * 4
+};
+/* Definitions for intrQueue */
+osMessageQueueId_t intrQueueHandle;
+const osMessageQueueAttr_t intrQueue_attributes = {
+  .name = "intrQueue"
 };
 /* Definitions for intrSem */
 osSemaphoreId_t intrSemHandle;
@@ -76,8 +89,9 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
-void StartDefaultTask(void *argument);
+void StartDisplayTask(void *argument);
 void buttonTask_fun(void *argument);
+void ADCTaskFun(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -150,16 +164,23 @@ int main(void)
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
+  /* Create the queue(s) */
+  /* creation of intrQueue */
+  intrQueueHandle = osMessageQueueNew (16, sizeof(uint16_t), &intrQueue_attributes);
+
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  /* creation of displayTask */
+  displayTaskHandle = osThreadNew(StartDisplayTask, NULL, &displayTask_attributes);
 
   /* creation of buttonTask */
   buttonTaskHandle = osThreadNew(buttonTask_fun, NULL, &buttonTask_attributes);
+
+  /* creation of ADCTask */
+  ADCTaskHandle = osThreadNew(ADCTaskFun, NULL, &ADCTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -273,7 +294,7 @@ static void MX_ADC1_Init(void)
   */
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
-  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.Resolution = ADC_RESOLUTION_8B;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
@@ -437,14 +458,14 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE END 4 */
 
-/* USER CODE BEGIN Header_StartDefaultTask */
+/* USER CODE BEGIN Header_StartDisplayTask */
 /**
-  * @brief  Function implementing the defaultTask thread.
+  * @brief  Function implementing the displayTask thread.
   * @param  argument: Not used
   * @retval None
   */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument)
+/* USER CODE END Header_StartDisplayTask */
+void StartDisplayTask(void *argument)
 {
   /* USER CODE BEGIN 5 */
 	SSD1306_Init();
@@ -455,6 +476,8 @@ void StartDefaultTask(void *argument)
 	SSD1306_Puts ("WORLD !!", &Font_11x18, 1);
 
 	char c_cnt = 'A';
+	uint16_t rec_int = 0;
+	char msg[20] = "Nista\n\0";
   /* Infinite loop */
   for(;;)
   {
@@ -467,6 +490,16 @@ void StartDefaultTask(void *argument)
 
 	  SSD1306_GotoXY (10, 45);
 	  SSD1306_Putc (c_cnt, &Font_11x18, 1);
+
+	  if (osMessageQueueGetCount(intrQueueHandle)){
+		  osMessageQueueGet(intrQueueHandle, &rec_int, 0, osWaitForever);
+		  printf("Task 1111111 11 .......... primio poruku\n");
+		  SSD1306_GotoXY (25, 45);
+
+		  sprintf(msg, "ADC:%3i", rec_int);
+		  SSD1306_Puts (msg, &Font_11x18, 1);
+	  }
+
 	  SSD1306_UpdateScreen(); // update screen
 
 	  printf("<<<<<<<<<1111111111111 zavrsio task Displej\n");
@@ -497,10 +530,40 @@ void buttonTask_fun(void *argument)
 	  SSD1306_ToggleInvert();
 	  SSD1306_UpdateScreen();
 
+
 	  printf("<<<<<<<<<222222222222 zavrsio task Button\n");
 	  osDelay(1000);
   }
   /* USER CODE END buttonTask_fun */
+}
+
+/* USER CODE BEGIN Header_ADCTaskFun */
+/**
+* @brief Function implementing the ADCTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_ADCTaskFun */
+void ADCTaskFun(void *argument)
+{
+  /* USER CODE BEGIN ADCTaskFun */
+  uint16_t ad_res = 0;
+  /* Infinite loop */
+  for(;;)
+  {
+	// Start ADC Conversion
+	HAL_ADC_Start(&hadc1);
+	 // Poll ADC1 Perihperal & TimeOut = 1mSec
+	HAL_ADC_PollForConversion(&hadc1, 1);
+	 // Read The ADC Conversion Result & Map It To PWM DutyCycle
+	ad_res = HAL_ADC_GetValue(&hadc1);
+
+	osMessageQueuePut(intrQueueHandle, &ad_res, 0, osWaitForever);
+	printf("222222222222 .......... poslao poruku\n");
+
+    osDelay(500);
+  }
+  /* USER CODE END ADCTaskFun */
 }
 
  /**
