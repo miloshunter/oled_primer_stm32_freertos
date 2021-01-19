@@ -489,9 +489,10 @@ void buttonTask_fun(void *argument)
   for(;;)
   {
 	  printf("Task Button 22------->>>>>>>> usao\n");
+
 	  printf("Cekaj semafor\n");
-	  //osThreadSuspend(buttonTaskHandle);
 	  osSemaphoreAcquire(intrSemHandle, 500000);
+
 	  printf("Nastavi\n");
 	  SSD1306_ToggleInvert();
 	  SSD1306_UpdateScreen();
